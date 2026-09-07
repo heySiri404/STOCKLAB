@@ -9,6 +9,7 @@ def Transform_price(df: pd.DataFrame) -> pd.DataFrame:
         "time",
         "open",
         "high",
+        "low",
         "close",
         "volume"
     ]

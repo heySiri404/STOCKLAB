@@ -1,5 +1,5 @@
 from database.connection import getConnection, getEngine
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
 from psycopg2.extras import execute_values
 import pandas as pd
 
@@ -144,3 +144,54 @@ class RepoPrice:
                 cur.close()
             if conn:
                 conn.close()
+
+    def get_avg_traded_value(self, symbols, start_date, end_date):
+        sql = text("""
+            SELECT
+                s.symbol,
+                AVG(dp.close_price * dp.volume) AS avg_trade
+            FROM daily_prices dp
+            JOIN stocks s ON dp.stock_id = s.id
+            WHERE s.symbol IN :symbols
+              AND dp.trading_date BETWEEN :start_date AND :end_date
+            GROUP BY s.symbol
+            ORDER BY s.symbol
+        """).bindparams(
+            bindparam("symbols", expanding=True)
+        )
+
+        return pd.read_sql(
+            sql,
+            getEngine(),
+            params={
+                "symbols": list(symbols),
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+        )
+
+    def get_close_prices(self, symbols, start_date, end_date):
+        """Fetch close prices for all symbols with one database query."""
+        sql = text("""
+            SELECT
+                s.symbol,
+                dp.trading_date,
+                dp.close_price
+            FROM daily_prices dp
+            JOIN stocks s ON dp.stock_id = s.id
+            WHERE s.symbol IN :symbols
+              AND dp.trading_date BETWEEN :start_date AND :end_date
+            ORDER BY dp.trading_date, s.symbol
+        """).bindparams(
+            bindparam("symbols", expanding=True)
+        )
+
+        return pd.read_sql(
+            sql,
+            getEngine(),
+            params={
+                "symbols": list(symbols),
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+        )
