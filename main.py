@@ -6,10 +6,7 @@ def main():
 
     pipeline = Pipeline()
 
-    pipeline.run(
-        stocks=STOCKS,
-        config=CONFIG
-    )
+    pipeline.update(STOCKS,CONFIG)
 
 
 if __name__ == "__main__":

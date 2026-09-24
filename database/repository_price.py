@@ -186,7 +186,7 @@ class RepoPrice:
             bindparam("symbols", expanding=True)
         )
 
-        return pd.read_sql(
+        price_df =  pd.read_sql(
             sql,
             getEngine(),
             params={
@@ -195,3 +195,27 @@ class RepoPrice:
                 "end_date": end_date,
             },
         )
+        price_df["trading_date"] = pd.to_datetime(price_df["trading_date"])
+
+        price_df = price_df.pivot(
+            index="trading_date",
+            columns="symbol",
+            values="close_price",
+                )
+
+        price_df.columns.name = None
+
+        return price_df
+        
+
+    def get_latest_date(self):
+            """Fetch latest_date query."""
+            sql = text("""
+                SELECT MAX(trading_date) AS latest_date
+                FROM daily_prices
+            """)
+    
+            return pd.read_sql(
+                sql,
+                getEngine(),
+            )

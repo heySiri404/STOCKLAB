@@ -1,6 +1,8 @@
 from datetime import date
 from math import isfinite
 from numbers import Real
+import numpy as np
+import pandas as pd
 
 from database.repository_price import RepoPrice
 rpp = RepoPrice()
@@ -20,28 +22,39 @@ class Portfolio:
         self.trade_history: list[dict] = []
         self.total_short_stocks: dict[str, float] = {}
 
-    def buy(self, symbol:str, quantity: float, trading_date:str):
-        if quantity <= 0:
-            raise ValueError("quantity must be positive")
-        price = float(rpp.get_price_btw(symbol,start_date=trading_date,end_date=trading_date)["close_price"].iloc[0])
-        cur_cost = price*quantity
-        if cur_cost > self.balance:
-            print("Balance is not enough")
-            return None
-        else: 
-            old_quantity = self.total_owned_stocks.get(symbol, 0)
-            new_quantity = old_quantity + quantity
-            self.balance -= cur_cost
-            self.total_owned_stocks[symbol] = new_quantity
-            self.trade_history.append({
-                    "symbol": symbol,
-                    "quantity": quantity,
-                    "asset_type": "stock",
-                    "side": "BUY",
-                    "trading_date": trading_date,
-                    "price": price,
-                    "cost": cur_cost
-                })
+    def buy(self, symbols:list[str], quantities: list[int], trading_date:str):
+            bought_stocks = 0
+            for symbol,quantity in zip(symbols,quantities):
+                if quantity <= 0:
+                    raise ValueError("quantity must be positive")
+                
+                price_df = rpp.get_price_btw(symbol,start_date=trading_date,end_date=trading_date)
+                if price_df is None and price_df['close_price'].empty:
+                    print(f"Skipped {symbol}: No price data on {trading_date}.")
+                    continue
+                price = price_df['close_price'].iloc[0]
+                cur_cost = price*quantity
+
+                if cur_cost > self.balance:
+                    print(f"Balance is not enough to buy :{symbol}")
+                    continue
+
+                else: 
+                    bought_stocks +=1
+                    print(f"successfully bought {symbol}, current number stocks bought :{bought_stocks}")
+                    old_quantity = self.total_owned_stocks.get(symbol, 0)
+                    new_quantity = old_quantity + quantity
+                    self.balance -= cur_cost
+                    self.total_owned_stocks[symbol] = new_quantity
+                    self.trade_history.append({
+                            "symbol": symbol,
+                            "quantity": quantity,
+                            "asset_type": "stock",
+                            "side": "BUY",
+                            "trading_date": trading_date,
+                            "price": price,
+                            "cost": cur_cost
+                        })
     
     def sell(self, symbol:str, quantity: float, trading_date:str):
         if quantity <= 0:
@@ -72,35 +85,35 @@ class Portfolio:
             del self.total_owned_stocks[symbol]
 
     def get_portfolio_value(self, trading_date: str):
-        long_value = 0.0
-        short_value = 0.0
+        total_value = 0
+        stocks_owned = []
+        quantity_owned = []
+        for symbol,quantity in self.total_owned_stocks.items():
+            stocks_owned.append(symbol)
+            quantity_owned.append(quantity)
 
-        # Giá trị cổ phiếu đang hold
-        for symbol, quantity in self.total_owned_stocks.items():
-            close_price = float(rpp.get_price_btw(
-                symbol,
-                start_date=trading_date,
-                end_date=trading_date
-            )["close_price"].iloc[0])
+        prices = rpp.get_close_prices(symbols=stocks_owned,start_date=trading_date,end_date=trading_date)
+        for i in range(len(self.total_owned_stocks)):
+            total_value += prices[stocks_owned[i]].iloc[0] * quantity_owned[i]
 
-            long_value += close_price * quantity
-
-        # Giá trị nghĩa vụ phải mua lại của SHORT
-        for symbol, quantity in self.total_short_stocks.items():
-            close_price = rpp.get_price_btw(
-                symbol,
-                start_date=trading_date,
-                end_date=trading_date
-            )["close_price"].iloc[0]
-
-            short_value += close_price * quantity
-
-        return self.balance + long_value - short_value
+        return self.balance + total_value
 
     def get_pnl(self, trading_date: str):
         current_value = self.get_portfolio_value(trading_date)
         return current_value - self.initial_capital
 
+    def log_return(self,start_date,end_date):
+        n_returns = []
+        trading_days = pd.date_range(start=start_date, end=end_date, freq='B')
+        for date in trading_days:
+            str_date = date.strftime('%Y-%m-%d')
+            n_returns.append(self.get_portfolio_value(str_date))
+        
+        n_returns = np.array(n_returns)
+
+        l_returns = np.log(n_returns[1:]/n_returns[:-1])*100
+        return l_returns
+        
     def short(self, symbol: str, quantity: float, trading_date: str):
         if quantity <= 0:
             raise ValueError("quantity must be positive")

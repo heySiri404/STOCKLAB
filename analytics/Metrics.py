@@ -110,6 +110,19 @@ class Metrics:
             .reset_index()
         )
 
+    def return_votality(self,symbols:list[str],start_date:str, end_date:str):
+        symbols = self._validate_symbols(symbols)
+        returns = self.log_return_list(symbols,start_date,end_date)
+        return pd.DataFrame(returns.var()).rename(columns={0:"VLR"})
+
+    def return_std(self,symbols:list[str],start_date:str, end_date:str):
+        symbols = self._validate_symbols(symbols)
+        returns = self.log_return_list(symbols,start_date,end_date)
+        return pd.DataFrame(returns.std()).rename(columns={0:"STDR"})
+    
+        
     def corr(self,symbols : list[str],start_date:str,end_date:str) -> pd.DataFrame:
         log_R = self.log_return_list(symbols,start_date,end_date)
         return log_R.corr(method ="pearson")
+
+    #def autocorrelation():
