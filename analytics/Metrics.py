@@ -125,4 +125,14 @@ class Metrics:
         log_R = self.log_return_list(symbols,start_date,end_date)
         return log_R.corr(method ="pearson")
 
-    #def autocorrelation():
+    def autocorrelation(self, returns: np.ndarray, lag_k:int):
+        if lag_k < 0:
+            raise ValueError("lag_k must be non-negative")
+
+        if lag_k >= len(returns):
+            raise ValueError("lag_k must be smaller than len(returns)")
+        
+        m = returns.mean()
+        t = np.sum((returns[lag_k:] - m)*(returns[:-lag_k]-m))
+        d = np.sum((returns-m)**2)
+        return t/d

@@ -29,7 +29,13 @@ class Portfolio:
                     raise ValueError("quantity must be positive")
                 
                 price_df = rpp.get_price_btw(symbol,start_date=trading_date,end_date=trading_date)
-                if price_df is None and price_df['close_price'].empty:
+                if price_df is None:
+                    raise ConnectionError(
+                        "Could not retrieve price data for "
+                        f"{symbol} on {trading_date}. "
+                        "Check the database connection and configuration."
+                    )
+                if price_df.empty or price_df["close_price"].empty:
                     print(f"Skipped {symbol}: No price data on {trading_date}.")
                     continue
                 price = price_df['close_price'].iloc[0]
@@ -92,9 +98,32 @@ class Portfolio:
             stocks_owned.append(symbol)
             quantity_owned.append(quantity)
 
-        prices = rpp.get_close_prices(symbols=stocks_owned,start_date=trading_date,end_date=trading_date)
-        for i in range(len(self.total_owned_stocks)):
-            total_value += prices[stocks_owned[i]].iloc[0] * quantity_owned[i]
+        # A requested business day can still be a market holiday.  Use the
+        # latest available close up to that date instead of assuming that the
+        # query returns one row for every symbol.
+        first_trade_date = min(
+            trade["trading_date"] for trade in self.trade_history
+            if trade["side"] == "BUY"
+        )
+        prices = rpp.get_close_prices(
+            symbols=stocks_owned,
+            start_date=first_trade_date,
+            end_date=trading_date,
+        )
+        if prices is None or prices.empty:
+            raise ValueError(f"No price data available on or before {trading_date}")
+
+        for symbol, quantity in self.total_owned_stocks.items():
+            if symbol not in prices.columns:
+                raise ValueError(
+                    f"No price data available for {symbol} on or before {trading_date}"
+                )
+            price = prices[symbol].dropna()
+            if price.empty:
+                raise ValueError(
+                    f"No price data available for {symbol} on or before {trading_date}"
+                )
+            total_value += price.iloc[-1] * quantity
 
         return self.balance + total_value
 
